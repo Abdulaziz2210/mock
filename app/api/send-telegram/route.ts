@@ -44,8 +44,8 @@ export async function POST(request: Request) {
       // Try different chat ID formats
       const chatIds = [
         "@dreamzone_ielts_results", // Channel username
-        "-1002618961875", // Numeric channel ID
-        "-1002618961875", // Without the minus
+        "-1002320115900", // Numeric channel ID
+        "1002320115900", // Without the minus
       ]
 
       const formattedMessage = encodeURIComponent(message)

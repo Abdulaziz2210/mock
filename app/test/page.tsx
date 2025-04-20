@@ -46,6 +46,7 @@ export default function TestPage() {
   const [isTestComplete, setIsTestComplete] = useState<boolean>(false)
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false)
   const [submitError, setSubmitError] = useState<string>("")
+  const [currentUser, setCurrentUser] = useState<string>("")
 
   // Reading test answers
   const [readingAnswers, setReadingAnswers] = useState<string[]>(Array(5).fill(""))
@@ -80,8 +81,12 @@ export default function TestPage() {
   // Check if user is logged in
   useEffect(() => {
     const isLoggedIn = sessionStorage.getItem("isLoggedIn")
+    const user = sessionStorage.getItem("currentUser") || ""
+
     if (!isLoggedIn) {
       router.push("/")
+    } else {
+      setCurrentUser(user)
     }
   }, [router])
 
@@ -142,7 +147,7 @@ export default function TestPage() {
       const listeningScore = calculateListeningScore()
 
       const results = {
-        student: "Abduraxmatov Abdulaziz",
+        student: currentUser,
         readingScore,
         readingPercentage: Math.round((readingScore / 5) * 100),
         listeningScore,
@@ -199,6 +204,9 @@ ${results.speakingAnswer}
       // Show completion message
       setIsTestComplete(true)
       setIsTestActive(false)
+
+      // Clear login session after test completion
+      sessionStorage.removeItem("isLoggedIn")
     } catch (error) {
       console.error("Error submitting results:", error)
       setSubmitError(t("submit_error"))
@@ -207,6 +215,8 @@ ${results.speakingAnswer}
       setTimeout(() => {
         setIsTestComplete(true)
         setIsTestActive(false)
+        // Clear login session after test completion
+        sessionStorage.removeItem("isLoggedIn")
       }, 3000)
     } finally {
       setIsSubmitting(false)
@@ -218,7 +228,9 @@ ${results.speakingAnswer}
     const minutes = Math.floor((seconds % 3600) / 60)
     const remainingSeconds = seconds % 60
 
-    return `${hours > 0 ? `${hours}:` : ""}${minutes < 10 && hours > 0 ? "0" : ""}${minutes}:${remainingSeconds < 10 ? "0" : ""}${remainingSeconds}`
+    return `${hours > 0 ? `${hours}:` : ""}${minutes < 10 && hours > 0 ? "0" : ""}${minutes}:${
+      remainingSeconds < 10 ? "0" : ""
+    }${remainingSeconds}`
   }
 
   const handleReadingAnswerChange = (index: number, value: string) => {
@@ -611,7 +623,7 @@ ${results.speakingAnswer}
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-4">
+    <div className="min-h-screen bg-[#f0f4f9] dark:bg-gray-900 p-4">
       <div className="absolute top-4 right-4">
         <LanguageSwitcher />
       </div>
@@ -625,6 +637,11 @@ ${results.speakingAnswer}
             <p className="text-gray-500 dark:text-gray-400">
               {isTestComplete ? t("test_complete_description") : t(`${currentSection}_description`)}
             </p>
+            {currentUser && !isTestComplete && (
+              <p className="text-sm text-primary mt-1">
+                {t("logged_in_as")}: {currentUser}
+              </p>
+            )}
           </div>
 
           {!isTestComplete && (

@@ -10,6 +10,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "Dream Zone IELTS",
   description: "IELTS preparation platform by Dream Zone",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
