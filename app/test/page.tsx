@@ -4,13 +4,8 @@ import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useLanguage } from "@/components/language-provider"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Clock, ArrowRight, CheckCircle, Maximize, Minimize, AlertTriangle, Volume2 } from "lucide-react"
-import { LanguageSwitcher } from "@/components/language-switcher"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Maximize, Minimize } from "lucide-react"
 
 type TestSection = "reading" | "listening" | "writing"
 type ReadingPassage = 1 | 2 | 3
@@ -37,6 +32,9 @@ const storeLocalResults = (results: any) => {
 
 // Convert raw score to IELTS band score
 const calculateBandScore = (rawScore: number, totalQuestions: number): number => {
+  // Return 0 if the raw score is 0
+  if (rawScore === 0) return 0
+
   // IELTS approximate band score conversion
   const percentage = (rawScore / totalQuestions) * 100
 
@@ -55,7 +53,7 @@ const calculateBandScore = (rawScore: number, totalQuestions: number): number =>
   if (percentage >= 30) return 3.0
   if (percentage >= 25) return 2.5
 
-  return 2.0 // Minimum band score
+  return 2.0 // Minimum band score (unless score is 0)
 }
 
 export default function TestPage() {
@@ -454,21 +452,30 @@ export default function TestPage() {
     try {
       const readingScore = calculateReadingScore()
       const listeningScore = calculateListeningScore()
+      const readingBandScore = calculateBandScore(readingScore, correctReadingAnswers.length)
+      const listeningBandScore = calculateBandScore(listeningScore, correctListeningAnswers.length)
+
+      // Calculate word counts for writing tasks
+      const task1Words = writingAnswer1.split(/\s+/).filter((word) => word.length > 0).length
+      const task2Words = writingAnswer2.split(/\s+/).filter((word) => word.length > 0).length
 
       const results = {
         student: currentUser,
         readingScore,
         readingTotal: correctReadingAnswers.length,
         readingPercentage: Math.round((readingScore / correctReadingAnswers.length) * 100),
-        readingBand,
+        readingBand: readingBandScore,
         listeningScore,
         listeningTotal: correctListeningAnswers.length,
         listeningPercentage: Math.round((listeningScore / correctListeningAnswers.length) * 100),
-        listeningBand,
+        listeningBand: listeningBandScore,
         writingTask1: writingAnswer1 || "No response provided",
+        writingTask1Words: task1Words,
         writingTask2: writingAnswer2 || "No response provided",
-        writingBand,
-        overallBand,
+        writingTask2Words: task2Words,
+        // No writing band score as requested
+        // Calculate overall band score without writing
+        overallBand: Math.round(((readingBandScore + listeningBandScore) / 2) * 10) / 10,
         completed: new Date().toLocaleString(),
       }
 
@@ -482,12 +489,15 @@ export default function TestPage() {
 
 📚 *Reading*: ${results.readingScore}/${results.readingTotal} (${results.readingPercentage}%) - Band ${results.readingBand.toFixed(1)}
 🎧 *Listening*: ${results.listeningScore}/${results.listeningTotal} (${results.listeningPercentage}%) - Band ${results.listeningBand.toFixed(1)}
-✍️ *Writing*: Band ${results.writingBand.toFixed(1)}
+
+✍️ *Writing*:
+Task 1: ${task1Words} words
+Task 2: ${task2Words} words
 
 🌟 *Overall Band Score*: ${results.overallBand.toFixed(1)}
 
 ⏰ *Completed*: ${results.completed}
-      `
+    `
 
       // Always log results to console as a reliable fallback
       console.log("========== TEST RESULTS ==========")
@@ -581,13 +591,9 @@ export default function TestPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="passage">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="passage">Passage</TabsTrigger>
-          <TabsTrigger value="questions">Questions</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="passage" className="p-4 border rounded-md mt-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Passage on the left */}
+        <div className="p-4 border rounded-md h-[600px] overflow-y-auto">
           <div className="prose dark:prose-invert max-w-none">
             {currentPassage === 1 && (
               <>
@@ -846,16 +852,15 @@ export default function TestPage() {
               </>
             )}
           </div>
-        </TabsContent>
+        </div>
 
-        <TabsContent value="questions" className="p-4 border rounded-md mt-2 space-y-6">
-          <div className="space-y-4">
+        {/* Questions on the right */}
+        <div className="p-4 border rounded-md h-[600px] overflow-y-auto">
+          <div className="space-y-6 text-lg">
             {currentPassage === 1 && (
               <>
-                <h3 className="text-lg font-semibold">Questions 1-7</h3>
-                <p className="mb-4">
-                  Do the following statements agree with the information given in Reading Passage 1?
-                </p>
+                <h3 className="text-xl font-semibold">Questions 1-7</h3>
+                <p className="mb-4">Do the following statements agree with the information given in Reading Passage 1?</p>
                 <p className="mb-2">
                   In boxes 1-7 on your answer sheet, write:
                   <br />
@@ -867,72 +872,72 @@ export default function TestPage() {
                 </p>
 
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>1. Other people have been referred to as 'the last man who knew everything'.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">1. Other people have been referred to as 'the last man who knew everything'.</p>
                     <Input
                       value={readingAnswers[0]}
                       onChange={(e) => handleReadingAnswerChange(0, e.target.value)}
                       placeholder="TRUE / FALSE / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>2. The fact that Young's childhood brilliance continued into adulthood was normal.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">2. The fact that Young's childhood brilliance continued into adulthood was normal.</p>
                     <Input
                       value={readingAnswers[1]}
                       onChange={(e) => handleReadingAnswerChange(1, e.target.value)}
                       placeholder="TRUE / FALSE / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>3. Young's talents as a doctor are described as surpassing his other skills.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">3. Young's talents as a doctor are described as surpassing his other skills.</p>
                     <Input
                       value={readingAnswers[2]}
                       onChange={(e) => handleReadingAnswerChange(2, e.target.value)}
                       placeholder="TRUE / FALSE / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>4. Young's advice was sought by several bodies responsible for local and national matters.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">4. Young's advice was sought by several bodies responsible for local and national matters.</p>
                     <Input
                       value={readingAnswers[3]}
                       onChange={(e) => handleReadingAnswerChange(3, e.target.value)}
                       placeholder="TRUE / FALSE / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>5. All Young's written works were published in the Encyclopaedia Britannica.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">5. All Young's written works were published in the Encyclopaedia Britannica.</p>
                     <Input
                       value={readingAnswers[4]}
                       onChange={(e) => handleReadingAnswerChange(4, e.target.value)}
                       placeholder="TRUE / FALSE / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>6. Young was interested in a range of social pastimes.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">6. Young was interested in a range of social pastimes.</p>
                     <Input
                       value={readingAnswers[5]}
                       onChange={(e) => handleReadingAnswerChange(5, e.target.value)}
                       placeholder="TRUE / FALSE / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>7. Young suffered from poor health in his later years.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">7. Young suffered from poor health in his later years.</p>
                     <Input
                       value={readingAnswers[6]}
                       onChange={(e) => handleReadingAnswerChange(6, e.target.value)}
                       placeholder="TRUE / FALSE / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
                 </div>
 
-                <h3 className="text-lg font-semibold mt-6">Questions 8-13</h3>
+                <h3 className="text-xl font-semibold mt-6">Questions 8-13</h3>
                 <p className="mb-4">
                   Answer the questions below.
                   <br />
@@ -940,76 +945,77 @@ export default function TestPage() {
                 </p>
 
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>8. How many life stories did Thomas Young write for the Encyclopaedia Britannica?</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">8. How many life stories did Thomas Young write for the Encyclopaedia Britannica?</p>
                     <Input
                       value={readingAnswers[7]}
                       onChange={(e) => handleReadingAnswerChange(7, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>9. What was the subject of Thomas Young's first academic paper?</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">9. What was the subject of Thomas Young's first academic paper?</p>
                     <Input
                       value={readingAnswers[8]}
                       onChange={(e) => handleReadingAnswerChange(8, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>10. What name did Young give to a group of languages?</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">10. What name did Young give to a group of languages?</p>
                     <Input
                       value={readingAnswers[9]}
                       onChange={(e) => handleReadingAnswerChange(9, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>11. Who inspired Young to enter the medical profession?</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">11. Who inspired Young to enter the medical profession?</p>
                     <Input
                       value={readingAnswers[10]}
                       onChange={(e) => handleReadingAnswerChange(10, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>12. At which place of higher learning did Young hold a teaching position?</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">12. At which place of higher learning did Young hold a teaching position?</p>
                     <Input
                       value={readingAnswers[11]}
                       onChange={(e) => handleReadingAnswerChange(11, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>13. What was the improvement to London roads on which Young's ideas were sought?</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">13. What was the improvement to London roads on which Young's ideas were sought?</p>
                     <Input
                       value={readingAnswers[12]}
                       onChange={(e) => handleReadingAnswerChange(12, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
                 </div>
               </>
             )}
 
+            {/* Similar changes for passage 2 and 3 questions - adding the same styling */}
             {currentPassage === 2 && (
               <>
-                <h3 className="text-lg font-semibold">Questions 14-20</h3>
+                <h3 className="text-xl font-semibold">Questions 14-20</h3>
                 <p className="mb-4">
                   Reading Passage 2 has seven sections, A-G.
                   <br />
                   Choose the correct heading for each section from the list of headings below.
                 </p>
 
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md mb-4">
-                  <p className="font-medium">List of Headings</p>
-                  <ol className="list-roman pl-5 mt-2">
+                <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md mb-4">
+                  <p className="font-medium text-lg">List of Headings</p>
+                  <ol className="list-roman pl-5 mt-2 text-lg">
                     <li>How new clothing styles are created</li>
                     <li>The rise of the fashion industry</li>
                     <li>Joining the garment pieces together</li>
@@ -1022,138 +1028,136 @@ export default function TestPage() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>14. Section A</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">14. Section A</p>
                     <Input
                       value={readingAnswers[13]}
                       onChange={(e) => handleReadingAnswerChange(13, e.target.value)}
                       placeholder="Enter heading number (i-viii)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>15. Section B</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">15. Section B</p>
                     <Input
                       value={readingAnswers[14]}
                       onChange={(e) => handleReadingAnswerChange(14, e.target.value)}
                       placeholder="Enter heading number (i-viii)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>16. Section C</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">16. Section C</p>
                     <Input
                       value={readingAnswers[15]}
                       onChange={(e) => handleReadingAnswerChange(15, e.target.value)}
                       placeholder="Enter heading number (i-viii)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>17. Section D</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">17. Section D</p>
                     <Input
                       value={readingAnswers[16]}
                       onChange={(e) => handleReadingAnswerChange(16, e.target.value)}
                       placeholder="Enter heading number (i-viii)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>18. Section E</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">18. Section E</p>
                     <Input
                       value={readingAnswers[17]}
                       onChange={(e) => handleReadingAnswerChange(17, e.target.value)}
                       placeholder="Enter heading number (i-viii)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>19. Section F</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">19. Section F</p>
                     <Input
                       value={readingAnswers[18]}
                       onChange={(e) => handleReadingAnswerChange(18, e.target.value)}
                       placeholder="Enter heading number (i-viii)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>20. Section G</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">20. Section G</p>
                     <Input
                       value={readingAnswers[19]}
                       onChange={(e) => handleReadingAnswerChange(19, e.target.value)}
                       placeholder="Enter heading number (i-viii)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
                 </div>
 
-                <h3 className="text-lg font-semibold mt-6">Questions 21-24</h3>
+                <h3 className="text-xl font-semibold mt-6">Questions 21-24</h3>
                 <p className="mb-4">
                   Complete the summary below.
                   <br />
                   Choose NO MORE THAN TWO WORDS from the passage for each answer.
                 </p>
 
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md mb-4">
-                  <p className="font-medium">The development of a modern fashion industry</p>
-                  <p className="mt-2">
+                <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md mb-4">
+                  <p className="font-medium text-lg">The development of a modern fashion industry</p>
+                  <p className="mt-2 text-lg">
                     Up until the middle of the 19th century, people generally wore handmade clothes. After that the
                     situation changed, and by the 20th century many clothes were mass produced. This development was
                     partly due to inventions like the 21 ........................... It was also the result of general
                     changes in manufacturing systems, as well as the spread of shops like 22 ................... The
-                    changes also led to the standardisation of sizes and 23 ........................... Today, despite
-                    the fact that the fashion industry originated in 24 ........................... it has become a
-                    truly international enterprise.
+                    changes also led to the standardisation of sizes and 23 ........................... Today, despite the
+                    fact that the fashion industry originated in 24 ........................... it has become a truly
+                    international enterprise.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>21.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">21.</p>
                     <Input
                       value={readingAnswers[20]}
                       onChange={(e) => handleReadingAnswerChange(20, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>22.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">22.</p>
                     <Input
                       value={readingAnswers[21]}
                       onChange={(e) => handleReadingAnswerChange(21, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>23.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">23.</p>
                     <Input
                       value={readingAnswers[22]}
                       onChange={(e) => handleReadingAnswerChange(22, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>24.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">24.</p>
                     <Input
                       value={readingAnswers[23]}
                       onChange={(e) => handleReadingAnswerChange(23, e.target.value)}
                       placeholder="Answer"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
                 </div>
 
-                <h3 className="text-lg font-semibold mt-6">Questions 25 and 26</h3>
-                <p className="mb-4">Choose TWO letters, A-E.</p>
-                <p className="mb-4">
-                  Which TWO of the following statements does the writer make about garment assembly?
-                </p>
+                <h3 className="text-xl font-semibold mt-6">Questions 25 and 26</h3>
+                <p className="mb-4 text-lg">Choose TWO letters, A-E.</p>
+                <p className="mb-4 text-lg">Which TWO of the following statements does the writer make about garment assembly?</p>
 
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md mb-4">
-                  <div className="space-y-2">
+                <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md mb-4">
+                  <div className="space-y-2 text-lg">
                     <div className="flex items-start gap-2">
                       <span className="font-medium">A.</span>
                       <p>The majority of sewing is done by computer-operated machines.</p>
@@ -1178,22 +1182,22 @@ export default function TestPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>25. First choice</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">25. First choice</p>
                     <Input
                       value={readingAnswers[24]}
                       onChange={(e) => handleReadingAnswerChange(24, e.target.value)}
                       placeholder="Enter letter (A-E)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>26. Second choice</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">26. Second choice</p>
                     <Input
                       value={readingAnswers[25]}
                       onChange={(e) => handleReadingAnswerChange(25, e.target.value)}
                       placeholder="Enter letter (A-E)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
                 </div>
@@ -1202,16 +1206,16 @@ export default function TestPage() {
 
             {currentPassage === 3 && (
               <>
-                <h3 className="text-lg font-semibold">Questions 27-32</h3>
-                <p className="mb-4">Complete the summary using the list of words, A-L, below.</p>
+                <h3 className="text-xl font-semibold">Questions 27-32</h3>
+                <p className="mb-4 text-lg">Complete the summary using the list of words, A-L, below.</p>
 
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md mb-4">
-                  <p className="mb-2">
-                    Pterosaurs are believed to have existed until the end of the Cretaceous period. They are classed as
-                    27 ......................... which were capable of flight, although, unlike modern species, they had
-                    some 28 ......................... which is evidence of their having had warm blood.
+                <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md mb-4">
+                  <p className="mb-2 text-lg">
+                    Pterosaurs are believed to have existed until the end of the Cretaceous period. They are classed as 27
+                    ......................... which were capable of flight, although, unlike modern species, they had some
+                    28 ......................... which is evidence of their having had warm blood.
                   </p>
-                  <p className="mb-2">
+                  <p className="mb-2 text-lg">
                     There are two theories as to how they moved on land: perhaps with all their feet or by using their
                     29.......................... only. Another mystery has concerned the ability of the pterosaur to fly
                     despite its immense 30 .......................... and the fact that the bones making up the wing did
@@ -1221,8 +1225,8 @@ export default function TestPage() {
                   </p>
                 </div>
 
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md mb-4">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md mb-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-lg">
                     <div className="flex items-center gap-1">
                       <span className="font-medium">A</span>
                       <p>front feet</p>
@@ -1275,67 +1279,67 @@ export default function TestPage() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>27.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">27.</p>
                     <Input
                       value={readingAnswers[26]}
                       onChange={(e) => handleReadingAnswerChange(26, e.target.value)}
                       placeholder="Enter letter (A-L)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>28.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">28.</p>
                     <Input
                       value={readingAnswers[27]}
                       onChange={(e) => handleReadingAnswerChange(27, e.target.value)}
                       placeholder="Enter letter (A-L)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>29.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">29.</p>
                     <Input
                       value={readingAnswers[28]}
                       onChange={(e) => handleReadingAnswerChange(28, e.target.value)}
                       placeholder="Enter letter (A-L)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>30.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">30.</p>
                     <Input
                       value={readingAnswers[29]}
                       onChange={(e) => handleReadingAnswerChange(29, e.target.value)}
                       placeholder="Enter letter (A-L)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>31.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">31.</p>
                     <Input
                       value={readingAnswers[30]}
                       onChange={(e) => handleReadingAnswerChange(30, e.target.value)}
                       placeholder="Enter letter (A-L)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>32.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">32.</p>
                     <Input
                       value={readingAnswers[31]}
                       onChange={(e) => handleReadingAnswerChange(31, e.target.value)}
                       placeholder="Enter letter (A-L)"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
                 </div>
 
-                <h3 className="text-lg font-semibold mt-6">Questions 33-36</h3>
-                <p className="mb-4">
+                <h3 className="text-xl font-semibold mt-6">Questions 33-36</h3>
+                <p className="mb-4 text-lg">
                   Do the following statements agree with the claims of the writer in Reading Passage 3?
                 </p>
-                <p className="mb-2">
+                <p className="mb-2 text-lg">
                   In boxes 33-36 on your answer sheet, write:
                   <br />
                   <strong>YES</strong> if the statement agrees with the claims of the writer
@@ -1346,53 +1350,51 @@ export default function TestPage() {
                 </p>
 
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>33. It is rare to find a fossil of a pterosaur that clearly shows its skeleton.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">33. It is rare to find a fossil of a pterosaur that clearly shows its skeleton.</p>
                     <Input
                       value={readingAnswers[32]}
                       onChange={(e) => handleReadingAnswerChange(32, e.target.value)}
                       placeholder="YES / NO / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>34. The reason for building the model was to prove pterosaurs flew for long distances.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">34. The reason for building the model was to prove pterosaurs flew for long distances.</p>
                     <Input
                       value={readingAnswers[33]}
                       onChange={(e) => handleReadingAnswerChange(33, e.target.value)}
                       placeholder="YES / NO / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>
-                      35. It is possible that pterosaur species achieved their wing size as a result of the pteroid.
-                    </p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">35. It is possible that pterosaur species achieved their wing size as a result of the pteroid.</p>
                     <Input
                       value={readingAnswers[34]}
                       onChange={(e) => handleReadingAnswerChange(34, e.target.value)}
                       placeholder="YES / NO / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>36. Wilkinson has made several unsuccessful replicas of the pterosaur's head.</p>
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">36. Wilkinson has made several unsuccessful replicas of the pterosaur's head.</p>
                     <Input
                       value={readingAnswers[35]}
                       onChange={(e) => handleReadingAnswerChange(35, e.target.value)}
                       placeholder="YES / NO / NOT GIVEN"
-                      className="mt-1"
+                      className="mt-2"
                     />
                   </div>
                 </div>
 
-                <h3 className="text-lg font-semibold mt-6">Questions 37-40</h3>
-                <p className="mb-4">Choose the correct letter, A, B, C or D.</p>
+                <h3 className="text-xl font-semibold mt-6">Questions 37-40</h3>
+                <p className="mb-4 text-lg">Choose the correct letter, A, B, C or D.</p>
 
                 <div className="grid grid-cols-1 gap-4">
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>37. What was Professor Wilkinson's main problem, according to the third paragraph?</p>
-                    <div className="space-y-2 mt-2">
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">37. What was Professor Wilkinson's main problem, according to the third paragraph?</p>
+                    <div className="space-y-2 mt-2 text-lg">
                       <div className="flex items-start gap-2">
                         <span className="font-medium">A</span>
                         <p>Early amphibians had a more complex structure than pterosaurs.</p>
@@ -1417,9 +1419,9 @@ export default function TestPage() {
                       className="mt-3"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>38. What did Professor Wilkinson discover about a bone in pterosaurs called a pteroid?</p>
-                    <div className="space-y-2 mt-2">
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">38. What did Professor Wilkinson discover about a bone in pterosaurs called a pteroid?</p>
+                    <div className="space-y-2 mt-2 text-lg">
                       <div className="flex items-start gap-2">
                         <span className="font-medium">A</span>
                         <p>It was in an unexpected position.</p>
@@ -1444,9 +1446,9 @@ export default function TestPage() {
                       className="mt-3"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>39. According to the writer, the main problem with the remote-controlled 'pterosaur' is that</p>
-                    <div className="space-y-2 mt-2">
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">39. According to the writer, the main problem with the remote-controlled 'pterosaur' is that</p>
+                    <div className="space-y-2 mt-2 text-lg">
                       <div className="flex items-start gap-2">
                         <span className="font-medium">A</span>
                         <p>it has been unable to leave the ground so far.</p>
@@ -1471,9 +1473,9 @@ export default function TestPage() {
                       className="mt-3"
                     />
                   </div>
-                  <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                    <p>40. What does 'it' in the last sentence refer to?</p>
-                    <div className="space-y-2 mt-2">
+                  <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-md">
+                    <p className="text-lg">40. What does 'it' in the last sentence refer to?</p>
+                    <div className="space-y-2 mt-2 text-lg">
                       <div className="flex items-start gap-2">
                         <span className="font-medium">A</span>
                         <p>The information the tests have revealed</p>
@@ -1502,1100 +1504,5 @@ export default function TestPage() {
               </>
             )}
           </div>
-        </TabsContent>
-      </Tabs>
-
-      <div className="flex justify-end mt-4">
-        {currentPassage < 3 ? (
-          <Button onClick={handleNextPassage}>
-            Next Passage <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        ) : (
-          <Button onClick={handleSectionComplete}>
-            Next Section <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        )}
-      </div>
-    </div>
-  )
-
-  const renderListeningSection = () => (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-bold">Listening Section {currentListeningSection}</h3>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={toggleAudio}>
-            <Volume2 className="h-4 w-4 mr-2" />
-            {isAudioPlaying ? "Pause Audio" : "Play Audio"}
-            {process.env.NODE_ENV === "development" && (
-              <span className="ml-2 text-xs text-amber-500">(Audio files needed)</span>
-            )}
-          </Button>
-          <Button variant="outline" size="sm" onClick={toggleFullscreen}>
-            {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-            <span className="ml-2">{isFullscreen ? "Exit Fullscreen" : "Fullscreen"}</span>
-          </Button>
         </div>
-      </div>
-      <div className="mb-4">
-        <audio
-          ref={audioRef}
-          className="hidden"
-          onPlay={() => setIsAudioPlaying(true)}
-          onPause={() => setIsAudioPlaying(false)}
-          onEnded={() => setIsAudioPlaying(false)}
-          onError={(e) => {
-            const error = e.currentTarget.error
-            console.error("Audio playback error:", error ? error.message : "Unknown error")
-            setIsAudioPlaying(false)
-
-            // Show a more detailed error message in development mode
-            if (process.env.NODE_ENV === "development") {
-              console.log("Development mode: Audio file may not be available at /audio/listening-test.mp3")
-            }
-          }}
-          preload="auto"
-          controls
-        >
-          <source src="/audio/listening-test.mp3" type="audio/mpeg" />
-          Your browser does not support the audio element.
-        </audio>
-
-        {process.env.NODE_ENV === "development" && (
-          <Alert variant="warning" className="mt-2">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              Development mode: Audio file not detected. Please ensure you've added the listening-test.mp3 file to the
-              public/audio directory.
-            </AlertDescription>
-          </Alert>
-        )}
-      </div>
-      <div className="bg-white dark:bg-gray-800 p-4 rounded-md border">
-        {currentListeningSection === 1 && (
-          <>
-            <h4 className="font-medium mb-4">Section 1: Questions 1-10</h4>
-            <p className="mb-4">Complete the notes below.</p>
-            <p className="mb-4">Write ONE WORD or A NUMBER for each answer.</p>
-
-            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-6">
-              <h5 className="font-medium mb-2">Music Alive Agency</h5>
-              <p className="mb-2">Example: Contact person: Jim Granley</p>
-
-              <div className="space-y-3">
-                <div className="flex flex-col">
-                  <p>Members' details are on a 1 .....................</p>
-                  <Input
-                    value={listeningAnswers[0]}
-                    onChange={(e) => handleListeningAnswerChange(0, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <p>Type of music represented: modern music (2 ......................... and jazz)</p>
-                  <Input
-                    value={listeningAnswers[1]}
-                    onChange={(e) => handleListeningAnswerChange(1, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <p>Newsletter comes out once a 3 .....................</p>
-                  <Input
-                    value={listeningAnswers[2]}
-                    onChange={(e) => handleListeningAnswerChange(2, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <p>Cost of adult membership: 4 £ .....................</p>
-                  <Input
-                    value={listeningAnswers[3]}
-                    onChange={(e) => handleListeningAnswerChange(3, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <p>Current number of members: 5 .....................</p>
-                  <Input
-                    value={listeningAnswers[4]}
-                    onChange={(e) => handleListeningAnswerChange(4, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <p>Facilities include: rehearsal rooms and a 6 .....................</p>
-                  <Input
-                    value={listeningAnswers[5]}
-                    onChange={(e) => handleListeningAnswerChange(5, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <p>There is no charge for 7 ......................... advice</p>
-                  <Input
-                    value={listeningAnswers[6]}
-                    onChange={(e) => handleListeningAnswerChange(6, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <p>To become a member, send -a letter with contact details</p>
-                  <p>-a recent 8 .....................</p>
-                  <Input
-                    value={listeningAnswers[7]}
-                    onChange={(e) => handleListeningAnswerChange(7, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <p>Address: 707, 9 .......................... Street, Marbury</p>
-                  <Input
-                    value={listeningAnswers[8]}
-                    onChange={(e) => handleListeningAnswerChange(8, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-                <div className="flex flex-col">
-                  <p>Contact email: music. 10 ......................... @bsu.co.uk</p>
-                  <Input
-                    value={listeningAnswers[9]}
-                    onChange={(e) => handleListeningAnswerChange(9, e.target.value)}
-                    placeholder="Answer"
-                    className="mt-1 max-w-xs"
-                  />
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {currentListeningSection === 2 && (
-          <>
-            <h4 className="font-medium mb-4">Section 2: Questions 11-20</h4>
-            <div className="mb-6">
-              <h5 className="font-medium mb-2">Questions 11-14</h5>
-              <p className="mb-4">Choose the correct letter A, B or C.</p>
-              <p className="font-medium mb-2">Information for participants in the Albany fishing competition</p>
-
-              <div className="space-y-4">
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">11. What do participants need to take to the registration desk?</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>a form of identification</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>a competitor number</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>cash for the entrance fee</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[10]}
-                    onChange={(e) => handleListeningAnswerChange(10, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">12. What does the entrance fee to the competition include?</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>equipment for fishing</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>all food for both days</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>fuel for the fishing</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[11]}
-                    onChange={(e) => handleListeningAnswerChange(11, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">13. Participants without a fishing licence are recommended to apply for one</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>at the registration desk.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>over the phone.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>on the internet.</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[12]}
-                    onChange={(e) => handleListeningAnswerChange(12, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">14. What will happen at 6pm on Sunday?</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>The time allocated for fishing will end.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>The fish caught will be judged.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>The prizes will be awarded to the winners.</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[13]}
-                    onChange={(e) => handleListeningAnswerChange(13, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <h5 className="font-medium mb-2">Questions 15-20</h5>
-              <p className="mb-4">Label the map below.</p>
-              <p className="mb-4">Write the correct letter, A-I, next to questions 15-20.</p>
-
-              <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-4">
-                <h6 className="font-medium mb-2 text-center">Albany Fishing Competition Map</h6>
-                <div className="w-full h-64 bg-white dark:bg-gray-600 rounded-md mb-4 flex items-center justify-center">
-                  <p className="text-gray-500 dark:text-gray-400">Map with locations A-I</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>15. Registration area</p>
-                  <Input
-                    value={listeningAnswers[14]}
-                    onChange={(e) => handleListeningAnswerChange(14, e.target.value)}
-                    placeholder="Enter letter (A-I)"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>16. Shore fishing area</p>
-                  <Input
-                    value={listeningAnswers[15]}
-                    onChange={(e) => handleListeningAnswerChange(15, e.target.value)}
-                    placeholder="Enter letter (A-I)"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>17. Boat launching area</p>
-                  <Input
-                    value={listeningAnswers[16]}
-                    onChange={(e) => handleListeningAnswerChange(16, e.target.value)}
-                    placeholder="Enter letter (A-I)"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>18. Judging area</p>
-                  <Input
-                    value={listeningAnswers[17]}
-                    onChange={(e) => handleListeningAnswerChange(17, e.target.value)}
-                    placeholder="Enter letter (A-I)"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>19. Dining area</p>
-                  <Input
-                    value={listeningAnswers[18]}
-                    onChange={(e) => handleListeningAnswerChange(18, e.target.value)}
-                    placeholder="Enter letter (A-I)"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>20. Prize-giving area</p>
-                  <Input
-                    value={listeningAnswers[19]}
-                    onChange={(e) => handleListeningAnswerChange(19, e.target.value)}
-                    placeholder="Enter letter (A-I)"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {currentListeningSection === 3 && (
-          <>
-            <h4 className="font-medium mb-4">Section 3: Questions 21-30</h4>
-            <div className="mb-6">
-              <h5 className="font-medium mb-2">Questions 21-26</h5>
-              <p className="mb-4">Choose the correct letter, A, B or C.</p>
-              <p className="font-medium mb-2">Preparing for the end-of-year art exhibition</p>
-
-              <div className="space-y-4">
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">21. Max and Abby agree that in the art exhibition they are looking forward to</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>showing people their work.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>getting feedback from their tutor.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>talking to other students about their displays.</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[20]}
-                    onChange={(e) => handleListeningAnswerChange(20, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">22. In last year's exhibition, both students were impressed by</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>a set of metal sculptures.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>a series of wooden models.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>a collection of textile designs.</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[21]}
-                    onChange={(e) => handleListeningAnswerChange(21, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">23. What has Max decided to call his display?</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>Mother Nature</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>Views of Farmland</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>Seasons</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[22]}
-                    onChange={(e) => handleListeningAnswerChange(22, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">24. What does Abby think will be difficult about preparing for their displays?</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>having enough time to set it up</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>choosing which pieces to show</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>filling up all the available space</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[23]}
-                    onChange={(e) => handleListeningAnswerChange(23, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">25. What does Abby say about the summary they have to write?</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>She isn't sure whether people will read it.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>It will be difficult to keep it short enough.</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>It will be hard to clarify the reasons for her work.</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[24]}
-                    onChange={(e) => handleListeningAnswerChange(24, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-
-                <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
-                  <p className="mb-2">26. What aspect of the display will the students organise themselves?</p>
-                  <div className="space-y-1 ml-4">
-                    <div className="flex items-start gap-2">
-                      <span>A</span>
-                      <p>arranging the lighting</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>B</span>
-                      <p>inviting local journalists</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <span>C</span>
-                      <p>providing comment forms</p>
-                    </div>
-                  </div>
-                  <Input
-                    value={listeningAnswers[25]}
-                    onChange={(e) => handleListeningAnswerChange(25, e.target.value)}
-                    placeholder="A, B, or C"
-                    className="mt-2 max-w-xs"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-6">
-              <h5 className="font-medium mb-2">Questions 27-30</h5>
-              <p className="mb-4">
-                Which feature do the speakers identify as particularly interesting for each of the following exhibitions
-                they saw?
-              </p>
-              <p className="mb-4">
-                Choose FOUR answers from the box and write the correct letter, A-F, next to questions 27-30.
-              </p>
-
-              <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md mb-4">
-                <p className="font-medium mb-2">Interesting features</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <div className="flex items-start gap-2">
-                    <span className="font-medium">A</span>
-                    <p>the realistic colours</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-medium">B</span>
-                    <p>the sense of space</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-medium">C</span>
-                    <p>the unusual interpretation of the theme</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-medium">D</span>
-                    <p>the painting technique</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-medium">E</span>
-                    <p>the variety of materials used</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-medium">F</span>
-                    <p>the use of light and shade</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>27. On the Water</p>
-                  <Input
-                    value={listeningAnswers[26]}
-                    onChange={(e) => handleListeningAnswerChange(26, e.target.value)}
-                    placeholder="Enter letter (A-F)"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>28. City Life</p>
-                  <Input
-                    value={listeningAnswers[27]}
-                    onChange={(e) => handleListeningAnswerChange(27, e.target.value)}
-                    placeholder="Enter letter (A-F)"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>29. Faces</p>
-                  <Input
-                    value={listeningAnswers[28]}
-                    onChange={(e) => handleListeningAnswerChange(28, e.target.value)}
-                    placeholder="Enter letter (A-F)"
-                    className="mt-1"
-                  />
-                </div>
-                <div className="bg-white/50 dark:bg-gray-800/50 p-3 rounded-md">
-                  <p>30. Moods</p>
-                  <Input
-                    value={listeningAnswers[29]}
-                    onChange={(e) => handleListeningAnswerChange(29, e.target.value)}
-                    placeholder="Enter letter (A-F)"
-                    className="mt-1"
-                  />
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-
-        {currentListeningSection === 4 && (
-          <>
-            <h4 className="font-medium mb-4">Section 4: Questions 31-40</h4>
-            <p className="mb-4">Complete the notes below.</p>
-            <p className="mb-4">Write NO MORE THAN TWO WORDS for each answer.</p>
-
-            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-6">
-              <h5 className="font-medium mb-4 text-center">The Mangrove Regeneration Project</h5>
-
-              <div className="space-y-4">
-                <div>
-                  <p className="font-medium">Background:</p>
-                  <p>Mangrove forests:</p>
-                  <ul className="list-disc pl-8 space-y-1">
-                    <li className="flex items-baseline">
-                      <span>protect coastal areas from 31 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                      <span> by the sea</span>
-                    </li>
-                    <Input
-                      value={listeningAnswers[30]}
-                      onChange={(e) => handleListeningAnswerChange(30, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                    <li>are an important habitat for wildlife</li>
-                  </ul>
-                </div>
-
-                <div>
-                  <p className="font-medium">Problems:</p>
-                  <ul className="list-disc pl-8 space-y-1">
-                    <li className="flex items-baseline">
-                      <span>mangroves had been used by farmers as 32 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                    </li>
-                    <Input
-                      value={listeningAnswers[31]}
-                      onChange={(e) => handleListeningAnswerChange(31, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                    <li className="flex items-baseline">
-                      <span>mangroves were poisoned by the use of 33 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                    </li>
-                    <Input
-                      value={listeningAnswers[32]}
-                      onChange={(e) => handleListeningAnswerChange(32, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                    <li className="flex items-baseline">
-                      <span>local people used the mangroves as a place to put their 34 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                    </li>
-                    <Input
-                      value={listeningAnswers[33]}
-                      onChange={(e) => handleListeningAnswerChange(33, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                  </ul>
-                </div>
-
-                <div>
-                  <p className="font-medium">Actions taken to protect the mangroves:</p>
-                  <ul className="list-disc pl-8 space-y-1">
-                    <li className="flex items-baseline">
-                      <span>a barrier which was made of 35 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                      <span> was constructed - but it failed</span>
-                    </li>
-                    <Input
-                      value={listeningAnswers[34]}
-                      onChange={(e) => handleListeningAnswerChange(34, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                    <li>new mangroves had to be grown from seed</li>
-                    <li className="flex items-baseline">
-                      <span>the seeds of the 36 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                      <span> were used</span>
-                    </li>
-                    <Input
-                      value={listeningAnswers[35]}
-                      onChange={(e) => handleListeningAnswerChange(35, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                  </ul>
-                </div>
-
-                <div>
-                  <p className="font-medium">First set of seedlings:</p>
-                  <ul className="list-disc pl-8 space-y-1">
-                    <li className="flex items-baseline">
-                      <span>kept in small pots in a 37 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                      <span></span>
-                    </li>
-                    <Input
-                      value={listeningAnswers[36]}
-                      onChange={(e) => handleListeningAnswerChange(36, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                    <li className="flex items-baseline">
-                      <span>Watered with 38 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                      <span> rain water</span>
-                    </li>
-                    <Input
-                      value={listeningAnswers[37]}
-                      onChange={(e) => handleListeningAnswerChange(37, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                    <li>planted out on south side of a small island</li>
-                    <li className="flex items-baseline">
-                      <span>at risk from the large 39 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                      <span> population</span>
-                    </li>
-                    <Input
-                      value={listeningAnswers[38]}
-                      onChange={(e) => handleListeningAnswerChange(38, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                  </ul>
-                </div>
-
-                <div>
-                  <p className="font-medium">Second set of seedlings:</p>
-                  <ul className="list-disc pl-8 space-y-1">
-                    <li>planted in the seabed near established mangrove roots</li>
-                    <li className="flex items-baseline">
-                      <span>the young plants were destroyed in a 40 </span>
-                      <div className="flex-grow mx-1 border-b border-gray-400"></div>
-                      <span></span>
-                    </li>
-                    <Input
-                      value={listeningAnswers[39]}
-                      onChange={(e) => handleListeningAnswerChange(39, e.target.value)}
-                      placeholder="Answer"
-                      className="mt-1 max-w-xs"
-                    />
-                  </ul>
-                </div>
-
-                <div>
-                  <p className="font-medium">Results: The first set of seedlings was successful</p>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-      <div className="flex justify-end mt-4">
-        {currentListeningSection < 4 ? (
-          <Button onClick={handleNextListeningSection}>
-            Next Section <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        ) : (
-          <Button onClick={handleSectionComplete}>
-            Next Section <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
-        )}
-      </div>
-    </div>
-  )
-
-  useEffect(() => {
-    // Pause audio when changing sections or unmounting
-    return () => {
-      if (audioRef.current && isAudioPlaying) {
-        audioRef.current.pause()
-        setIsAudioPlaying(false)
-      }
-    }
-  }, [currentSection, currentListeningSection])
-
-  const renderWritingSection = () => (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-bold">Writing Test</h3>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={toggleFullscreen}>
-            {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-            <span className="ml-2">{isFullscreen ? "Exit Fullscreen" : "Fullscreen"}</span>
-          </Button>
-        </div>
-      </div>
-
-      <Tabs defaultValue="task1">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="task1">Task 1</TabsTrigger>
-          <TabsTrigger value="task2">Task 2</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="task1" className="p-4 border rounded-md mt-2">
-          <div className="mb-6">
-            <h4 className="font-medium mb-2">Task 1</h4>
-            <p className="mb-4">
-              The chart below shows the percentage of households with access to the internet in four different countries
-              between 2000 and 2020.
-            </p>
-
-            <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-md mb-4">
-              <p className="text-center mb-2 font-medium">Internet Access by Household (%)</p>
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b">
-                    <th className="p-2 text-left">Year</th>
-                    <th className="p-2 text-right">Country A</th>
-                    <th className="p-2 text-right">Country B</th>
-                    <th className="p-2 text-right">Country C</th>
-                    <th className="p-2 text-right">Country D</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="border-b">
-                    <td className="p-2">2000</td>
-                    <td className="p-2 text-right">15%</td>
-                    <td className="p-2 text-right">25%</td>
-                    <td className="p-2 text-right">10%</td>
-                    <td className="p-2 text-right">5%</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="p-2">2005</td>
-                    <td className="p-2 text-right">30%</td>
-                    <td className="p-2 text-right">45%</td>
-                    <td className="p-2 text-right">20%</td>
-                    <td className="p-2 text-right">15%</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="p-2">2010</td>
-                    <td className="p-2 text-right">55%</td>
-                    <td className="p-2 text-right">65%</td>
-                    <td className="p-2 text-right">40%</td>
-                    <td className="p-2 text-right">35%</td>
-                  </tr>
-                  <tr className="border-b">
-                    <td className="p-2">2015</td>
-                    <td className="p-2 text-right">75%</td>
-                    <td className="p-2 text-right">80%</td>
-                    <td className="p-2 text-right">60%</td>
-                    <td className="p-2 text-right">55%</td>
-                  </tr>
-                  <tr>
-                    <td className="p-2">2020</td>
-                    <td className="p-2 text-right">85%</td>
-                    <td className="p-2 text-right">90%</td>
-                    <td className="p-2 text-right">75%</td>
-                    <td className="p-2 text-right">70%</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <p className="mb-4">
-              Summarize the information by selecting and reporting the main features, and make comparisons where
-              relevant.
-              <br />
-              <strong>Write at least 150 words.</strong>
-            </p>
-
-            <Textarea
-              value={writingAnswer1}
-              onChange={(e) => setWritingAnswer1(e.target.value)}
-              placeholder="Write your answer here..."
-              className="min-h-[250px]"
-            />
-
-            <div className="mt-2 text-sm text-gray-500 flex justify-between">
-              <span>Word count: {writingAnswer1.split(/\s+/).filter((word) => word.length > 0).length}</span>
-              <span
-                className={
-                  writingAnswer1.split(/\s+/).filter((word) => word.length > 0).length >= 150
-                    ? "text-green-500"
-                    : "text-amber-500"
-                }
-              >
-                Minimum: 150 words
-              </span>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="task2" className="p-4 border rounded-md mt-2">
-          <div className="mb-6">
-            <h4 className="font-medium mb-2">Task 2</h4>
-            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-4">
-              <p className="mb-2">
-                <strong>
-                  Some people believe that universities should focus on providing academic skills rather than preparing
-                  students for employment. To what extent do you agree or disagree?
-                </strong>
-              </p>
-              <p>
-                Give reasons for your answer and include any relevant examples from your own knowledge or experience.
-              </p>
-            </div>
-
-            <p className="mb-4">
-              <strong>Write at least 250 words.</strong>
-            </p>
-
-            <Textarea
-              value={writingAnswer2}
-              onChange={(e) => setWritingAnswer2(e.target.value)}
-              placeholder="Write your answer here..."
-              className="min-h-[350px]"
-            />
-
-            <div className="mt-2 text-sm text-gray-500 flex justify-between">
-              <span>Word count: {writingAnswer2.split(/\s+/).filter((word) => word.length > 0).length}</span>
-              <span
-                className={
-                  writingAnswer2.split(/\s+/).filter((word) => word.length > 0).length >= 250
-                    ? "text-green-500"
-                    : "text-amber-500"
-                }
-              >
-                Minimum: 250 words
-              </span>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
-
-      <div className="flex justify-end mt-4">
-        <Button onClick={handleSectionComplete}>
-          Finish Test <ArrowRight className="ml-2 h-4 w-4" />
-        </Button>
-      </div>
-    </div>
-  )
-
-  const renderTestComplete = () => (
-    <div className="space-y-6">
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-md border">
-        <div className="text-center mb-6">
-          <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-          <h3 className="text-2xl font-bold mb-2">{t("test_complete")}</h3>
-          <p className="text-gray-500 dark:text-gray-400 mb-6">{t("test_complete_description")}</p>
-          <p className="text-gray-500 dark:text-gray-400">
-            Your test results have been submitted. Thank you for completing the test.
-          </p>
-        </div>
-
-        <div className="mt-8 text-center">
-          <Button onClick={() => (window.location.href = "/")} size="lg">
-            {t("return_home")}
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
-
-  const renderCurrentSection = () => {
-    if (isTestComplete) {
-      return renderTestComplete()
-    }
-
-    switch (currentSection) {
-      case "reading":
-        return renderReadingSection()
-      case "listening":
-        return renderListeningSection()
-      case "writing":
-        return renderWritingSection()
-      default:
-        return renderReadingSection()
-    }
-  }
-
-  return (
-    <div ref={fullscreenContainerRef} className="min-h-screen bg-[#f0f4f9] dark:bg-gray-900 p-4 overflow-auto">
-      <div className="absolute top-4 right-4 z-10">
-        <LanguageSwitcher />
-      </div>
-
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">
-              {isTestComplete ? t("test_complete") : `${t(currentSection)} ${t("test")}`}
-              {currentSection === "reading" && !isTestComplete && ` - Passage ${currentPassage}`}
-              {currentSection === "listening" && !isTestComplete && ` - Section ${currentListeningSection}`}
-            </h1>
-            <p className="text-gray-500 dark:text-gray-400">
-              {isTestComplete ? t("test_complete_description") : t(`${currentSection}_description`)}
-            </p>
-            {currentUser && !isTestComplete && (
-              <p className="text-sm text-primary mt-1">
-                {t("logged_in_as")}: {currentUser}
-              </p>
-            )}
-          </div>
-
-          {!isTestComplete && (
-            <div className="flex items-center gap-4">
-              {!isTestActive ? (
-                <Button onClick={startTest}>{t("start_test")}</Button>
-              ) : (
-                <div className="flex items-center gap-2 bg-white dark:bg-gray-800 px-4 py-2 rounded-md">
-                  <Clock className="h-5 w-5 text-gray-500" />
-                  <span className="font-medium">{formatTime(timeRemaining)}</span>
-                </div>
-              )}
-
-              {isTestActive && currentSection === "reading" && currentPassage < 3 ? (
-                <Button onClick={handleNextPassage} disabled={isSubmitting}>
-                  Next Passage
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              ) : (
-                isTestActive && (
-                  <Button onClick={handleSectionComplete} disabled={isSubmitting}>
-                    {currentSection === "writing" ? t("finish_test") : t("next_section")}
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                )
-              )}
-            </div>
-          )}
-        </div>
-
-        {submitError && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{submitError}</AlertDescription>
-          </Alert>
-        )}
-
-        {!isTestActive && !isTestComplete ? (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle>{t("test_instructions")}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p>{t(`${currentSection}_instructions`)}</p>
-              <div className="mt-4 flex items-center gap-2 bg-gray-100 dark:bg-gray-800 p-3 rounded-md">
-                <Clock className="h-5 w-5 text-gray-500" />
-                <span>
-                  {t("time_allowed")}:{" "}
-                  {formatTime(
-                    process.env.NODE_ENV === "development"
-                      ? devTimerConfig[currentSection]
-                      : timerConfig[currentSection],
-                  )}
-                </span>
-              </div>
-
-              {currentSection === "reading" && (
-                <div className="mt-4">
-                  <p className="font-medium">Test Format:</p>
-                  <ul className="list-disc pl-5 mt-2 space-y-1">
-                    <li>3 reading passages</li>
-                    <li>40 questions total</li>
-                    <li>60 minutes to complete all passages</li>
-                  </ul>
-                </div>
-              )}
-
-              {currentSection === "listening" && (
-                <div className="mt-4">
-                  <p className="font-medium">Test Format:</p>
-                  <ul className="list-disc pl-5 mt-2 space-y-1">
-                    <li>4 listening sections</li>
-                    <li>40 questions total</li>
-                    <li>30 minutes to complete all sections</li>
-                    <li>You will hear each recording ONCE only</li>
-                  </ul>
-                </div>
-              )}
-
-              {currentSection === "writing" && (
-                <div className="mt-4">
-                  <p className="font-medium">Test Format:</p>
-                  <ul className="list-disc pl-5 mt-2 space-y-1">
-                    <li>Task 1: Write a report based on visual information (graph, table, chart, diagram)</li>
-                    <li>Task 2: Write an essay in response to a point of view, argument or problem</li>
-                    <li>60 minutes to complete both tasks</li>
-                    <li>Minimum 150 words for Task 1</li>
-                    <li>Minimum 250 words for Task 2</li>
-                  </ul>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button onClick={startTest}>{t("start_test")}</Button>
-            </CardFooter>
-          </Card>
-        ) : (
-          renderCurrentSection()
-        )}
-      </div>
-    </div>
-  )
-}
+      </div>\
